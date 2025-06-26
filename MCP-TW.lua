@@ -548,13 +548,14 @@ function MCP_IsProfileLoaded(profileName)
     return true
 end
 
+local MCP_NonRaidPrompted = false
+
 function MCP_IsProfileLoaded(profileName)
     if not MCP_Config or not MCP_Config.profiles or not MCP_Config.profiles[profileName] then
         return false
     end
 
     local profile = MCP_Config.profiles[profileName]
-
     for i = 1, GetNumAddOns() do
         local name, _, _, enabled = GetAddOnInfo(i)
         if profile[name] ~= nil then
@@ -564,7 +565,6 @@ function MCP_IsProfileLoaded(profileName)
             end
         end
     end
-
     return true
 end
 
@@ -583,9 +583,7 @@ local raidZones = {
 
 function MCP_TableLength(t)
     local count = 0
-    for _ in pairs(t) do
-        count = count + 1
-    end
+    for _ in pairs(t) do count = count + 1 end
     return count
 end
 
@@ -594,9 +592,7 @@ function MCP_TableToString(t, sep)
     local first = true
     local i = 1
     while t[i] do
-        if not first then
-            str = str .. sep
-        end
+        if not first then str = str .. sep end
         str = str .. t[i]
         first = false
         i = i + 1
@@ -609,6 +605,7 @@ function MCP_CheckZoneAndPrompt()
     if not zone then return end
 
     if raidZones[zone] then
+        MCP_NonRaidPrompted = false -- reset flag when entering raid
         if MCP_IsProfileLoaded("raid") then return end
 
         StaticPopupDialogs["MCP_LOAD_RAID_PROFILE"] = {
@@ -625,6 +622,9 @@ function MCP_CheckZoneAndPrompt()
         StaticPopup_Show("MCP_LOAD_RAID_PROFILE")
 
     else
+        if MCP_NonRaidPrompted then return end -- only once
+        MCP_NonRaidPrompted = true
+
         if not MCP_Config or not MCP_Config.profiles then return end
 
         local options = {}
