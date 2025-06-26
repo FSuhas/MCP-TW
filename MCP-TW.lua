@@ -507,72 +507,6 @@ function MCP_OpenModifyProfileWindow(profile)
     ShowUIPanel(MCP_AddonList)
 end
 
-local raidZones = {
-    ["Naxxramas"] = true,
-    ["Zul'Gurub"] = true,
-    ["Ruins of Ahn'Qiraj"] = true,
-    ["Molten Core"] = true,
-    ["Onyxia's Lair"] = true,
-    ["Lower Karazhan Halls"] = true,
-    ["Blackwing Lair"] = true,
-    ["Emerald Sanctum"] = true,
-    ["Temple of Ahn'Qiraj"] = true,
-    ["Upper Karazhan Halls"] = true,
-}
-
-function MCP_CheckRaidZoneAndPrompt()
-    local zone = GetRealZoneText()
-    
-    if raidZones[zone] then
-        if MCP_Config and MCP_Config.profiles and MCP_Config.profiles["raid"] then
-            -- Popup pour charger le profil raid
-            StaticPopupDialogs["MCP_LOAD_RAID_PROFILE"] = {
-                text = "You have entered raid zone '"..zone.."'. Load 'raid' profile?",
-                button1 = YES,
-                button2 = NO,
-                OnAccept = function()
-                    MCP_LoadProfileByName("raid")
-                end,
-                timeout = 0,
-                whileDead = 1,
-                hideOnEscape = 1,
-            }
-            StaticPopup_Show("MCP_LOAD_RAID_PROFILE")
-        else
-            -- Popup pour créer le profil raid
-            StaticPopupDialogs["MCP_CREATE_RAID_PROFILE"] = {
-			text = "You have entered raid zone '"..zone.."'. 'raid' profile does not exist. Create it now?",
-			button1 = YES,
-			button2 = NO,
-			OnAccept = function()
-				if not MCP_Config.profiles then MCP_Config.profiles = {} end
-				MCP_Config.profiles["raid"] = {} -- créer un profil vide
-				print("Raid profile created!")
-
-				-- Ouvre la fenêtre de modif du profil raid
-				MCP_OpenModifyProfileWindow("raid")
-			end,
-			timeout = 0,
-			whileDead = 1,
-			hideOnEscape = 1,
-			}	
-            StaticPopup_Show("MCP_CREATE_RAID_PROFILE")
-        end
-    else
-
-    end
-end
-
-
-local MCP_ZoneCheckFrame = CreateFrame("Frame")
-MCP_ZoneCheckFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-MCP_ZoneCheckFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-
-MCP_ZoneCheckFrame:SetScript("OnEvent", function()
-    MCP_CheckRaidZoneAndPrompt()
-end)
-
-
 function MCP_LoadProfileByName(profileName)
     if not MCP_Config.profiles[profileName] then
         print("|cffff0000[MCP]|r The profile '" .. profileName .. "' does not exist.")
@@ -593,6 +527,148 @@ function MCP_LoadProfileByName(profileName)
     print("|cff00ff00[MCP]|r Profile loaded: |cffffff00" .. profileName .. "|r")
     ReloadUI()
 end
+
+function MCP_IsProfileLoaded(profileName)
+    if not MCP_Config or not MCP_Config.profiles or not MCP_Config.profiles[profileName] then
+        return false
+    end
+
+    local profile = MCP_Config.profiles[profileName]
+
+    for i = 1, GetNumAddOns() do
+        local name, _, _, enabled = GetAddOnInfo(i)
+        if profile[name] ~= nil then
+            local shouldBeEnabled = profile[name]
+            if (shouldBeEnabled == 1 and enabled ~= 1) or (shouldBeEnabled == 0 and enabled == 1) then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
+function MCP_IsProfileLoaded(profileName)
+    if not MCP_Config or not MCP_Config.profiles or not MCP_Config.profiles[profileName] then
+        return false
+    end
+
+    local profile = MCP_Config.profiles[profileName]
+
+    for i = 1, GetNumAddOns() do
+        local name, _, _, enabled = GetAddOnInfo(i)
+        if profile[name] ~= nil then
+            local shouldBeEnabled = profile[name]
+            if (shouldBeEnabled == 1 and enabled ~= 1) or (shouldBeEnabled == 0 and enabled == 1) then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
+local raidZones = {
+    ["Naxxramas"] = true,
+    ["Zul'Gurub"] = true,
+    ["Ruins of Ahn'Qiraj"] = true,
+    ["Molten Core"] = true,
+    ["Onyxia's Lair"] = true,
+    ["Lower Karazhan Halls"] = true,
+    ["Blackwing Lair"] = true,
+    ["Emerald Sanctum"] = true,
+    ["Temple of Ahn'Qiraj"] = true,
+    ["Upper Karazhan Halls"] = true,
+}
+
+function MCP_TableLength(t)
+    local count = 0
+    for _ in pairs(t) do
+        count = count + 1
+    end
+    return count
+end
+
+function MCP_TableToString(t, sep)
+    local str = ""
+    local first = true
+    local i = 1
+    while t[i] do
+        if not first then
+            str = str .. sep
+        end
+        str = str .. t[i]
+        first = false
+        i = i + 1
+    end
+    return str
+end
+
+function MCP_CheckZoneAndPrompt()
+    local zone = GetRealZoneText()
+    if not zone then return end
+
+    if raidZones[zone] then
+        if MCP_IsProfileLoaded("raid") then return end
+
+        StaticPopupDialogs["MCP_LOAD_RAID_PROFILE"] = {
+            text = "You are in " .. zone .. ".\n\nLoad the 'raid' profile?",
+            button1 = "Yes",
+            button2 = "No",
+            OnAccept = function()
+                MCP_LoadProfileByName("raid")
+            end,
+            timeout = 0,
+            whileDead = 1,
+            hideOnEscape = 1,
+        }
+        StaticPopup_Show("MCP_LOAD_RAID_PROFILE")
+
+    else
+        if not MCP_Config or not MCP_Config.profiles then return end
+
+        local options = {}
+        for profileName in pairs(MCP_Config.profiles) do
+            if profileName ~= "raid" and not MCP_IsProfileLoaded(profileName) then
+                table.insert(options, profileName)
+            end
+        end
+
+        if MCP_TableLength(options) == 0 then return end
+
+        local suggested = options[1]
+
+        StaticPopupDialogs["MCP_LOAD_OTHER_PROFILE"] = {
+            text = "You are in " .. zone .. ".\n\nLoad profile '" .. suggested .. "'?\n\n(Available: " .. MCP_TableToString(options, ", ") .. ")",
+            button1 = "Yes",
+            button2 = "No",
+            OnAccept = function()
+                MCP_LoadProfileByName(suggested)
+            end,
+            timeout = 0,
+            whileDead = 1,
+            hideOnEscape = 1,
+        }
+        StaticPopup_Show("MCP_LOAD_OTHER_PROFILE")
+    end
+end
+
+local MCP_ZoneCheckFrame = CreateFrame("Frame")
+MCP_ZoneCheckFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+MCP_ZoneCheckFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+MCP_ZoneCheckFrame:RegisterEvent("ZONE_CHANGED")
+MCP_ZoneCheckFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
+
+MCP_ZoneCheckFrame:SetScript("OnEvent", function()
+    this.timer = 1
+    this:SetScript("OnUpdate", function()
+        this.timer = this.timer - arg1
+        if this.timer <= 0 then
+            this:SetScript("OnUpdate", nil)
+            MCP_CheckZoneAndPrompt()
+        end
+    end)
+end)
 
 
 function MCP_DeleteProfile(profile)
