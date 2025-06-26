@@ -436,7 +436,7 @@ MCP_MinimapButton:RegisterForClicks("AnyUp")
 
 -- Texture du bouton
 local texture = MCP_MinimapButton:CreateTexture(nil, "BACKGROUND")
-texture:SetTexture("Interface\\AddOns\\MCP\\logo.tga") -- chemin vers ton logo
+texture:SetTexture("Interface\\AddOns\\MCP-TW\\logo.tga") -- chemin vers ton logo
 texture:SetAllPoints(MCP_MinimapButton)
 
 -- Drag handlers
