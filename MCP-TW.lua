@@ -619,34 +619,29 @@ function MCP_ShowSaveProfilePopup()
         button2 = CANCEL,
         hasEditBox = 1,
         maxLetters = 32,
-        hideOnEscape = 1,
         timeout = 0,
-        
+        hideOnEscape = 1,
         OnAccept = function()
-            local name = this.editBox:GetText()
-            if name and name ~= "" then
-                MCP_SaveProfile(name)
-                this:Hide()
-            else
-                DEFAULT_CHAT_FRAME:AddMessage("Profile name cannot be empty.")
-            end
+            local editBox = getglobal(this:GetParent():GetName().."EditBox")
+            MCP_SaveProfile(editBox:GetText())
         end,
-        
         EditBoxOnEnterPressed = function()
-            local name = this:GetText()
-            if name and name ~= "" then
-                MCP_SaveProfile(name)
-                this:GetParent():Hide()
-            else
-                DEFAULT_CHAT_FRAME:AddMessage("Profile name cannot be empty.")
+            local editBox = getglobal(this:GetParent():GetName().."EditBox")
+            MCP_SaveProfile(editBox:GetText())
+            this:GetParent():Hide()
+        end,
+        OnShow = function()
+            local editBox = getglobal(this:GetName().."EditBox")
+            local text = " "
+            if text == "NONE" then
+                text = ""
             end
+            editBox:SetText(text)
+            editBox:SetFocus()
         end,
     }
     StaticPopup_Show("MCP_SAVEPROFILE")
 end
-
-
-
 
 function MCP_MinimapButton_ShowMenu()
     if not MCP_MinimapDropDown then

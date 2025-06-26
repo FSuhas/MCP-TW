@@ -3,16 +3,14 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
   <Script file="localization.lua" />
   <Script file="MCP-TW.lua" />
 
-
 	<Frame name="MCP" enableMouse="false" parent="UIParent" >
        		<Scripts>
         		<OnLoad>
             			MCP_OnLoad();
 			</OnLoad>
 		</Scripts>
-	</Frame>
-	<Frame name="MCP_MinimapDropDown" inherits="UIDropDownMenuTemplate" hidden="true" />
-
+    	</Frame>
+		<Frame name="MCP_MinimapDropDown" inherits="UIDropDownMenuTemplate" hidden="true" />
 	<Button name="MCP_AddonListEntryTemplate" virtual="true">
 		<Size>
 			<AbsDimension x="520" y="16"/>
@@ -108,6 +106,26 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
                   </OnLeave>
                 </Scripts>
         </Button>
+	<Button name="GameMenuButtonAddOns" inherits="GameMenuButtonTemplate" text="MCP_ADDONS" parent="GameMenuFrame">
+		<Anchors>
+			<Anchor point="TOP" relativeTo="GameMenuButtonMacros" relativePoint="BOTTOM">
+				<Offset>
+					<AbsDimension x="0" y="-1"/>
+				</Offset>
+			</Anchor>
+		</Anchors>
+		<Scripts>
+			<OnLoad>
+				GameMenuButtonLogout:SetPoint("TOP",this:GetName(),"BOTTOM",0,-1);
+				GameMenuFrame:SetHeight(GameMenuFrame:GetHeight()+25);
+			</OnLoad>
+			<OnClick>
+				PlaySound("igMainMenuOption");
+				HideUIPanel(GameMenuFrame);
+				ShowUIPanel(MCP_AddonList);
+			</OnClick>
+		</Scripts>
+	</Button>
 	<Frame name="MCP_AddonList" hidden="true" toplevel="true" enableMouse="true" enableKeyboard="false" movable="true">
 		<Size>
 			<AbsDimension x="640" y="512"/>
