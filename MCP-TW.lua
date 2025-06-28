@@ -508,8 +508,8 @@ function MCP_OpenModifyProfileWindow(profile)
 end
 
 function MCP_LoadProfileByName(profileName)
-    if not MCP_Config.profiles[profileName] then
-        print("|cffff0000[MCP]|r The profile '" .. profileName .. "' does not exist.")
+    if not profileName or not MCP_Config or not MCP_Config.profiles or not MCP_Config.profiles[profileName] then
+        print("|cffff0000[MCP]|r The profile '" .. tostring(profileName) .. "' does not exist.")
         return
     end
 
@@ -524,7 +524,7 @@ function MCP_LoadProfileByName(profileName)
     MCP_SelectedProfile = profileName
     MCP_Config.SelectedProfile = profileName
 
-    print("|cff00ff00[MCP]|r Profile loaded: |cffffff00" .. profileName .. "|r")
+    print("|cff00ff00[MCP]|r Profile loaded: |cffffff00" .. profileName .. "|r")    
     ReloadUI()
 end
 
@@ -548,25 +548,9 @@ function MCP_IsProfileLoaded(profileName)
     return true
 end
 
+
+
 local MCP_NonRaidPrompted = false
-
-function MCP_IsProfileLoaded(profileName)
-    if not MCP_Config or not MCP_Config.profiles or not MCP_Config.profiles[profileName] then
-        return false
-    end
-
-    local profile = MCP_Config.profiles[profileName]
-    for i = 1, GetNumAddOns() do
-        local name, _, _, enabled = GetAddOnInfo(i)
-        if profile[name] ~= nil then
-            local shouldBeEnabled = profile[name]
-            if (shouldBeEnabled == 1 and enabled ~= 1) or (shouldBeEnabled == 0 and enabled == 1) then
-                return false
-            end
-        end
-    end
-    return true
-end
 
 local raidZones = {
     ["Naxxramas"] = true,
@@ -600,59 +584,101 @@ function MCP_TableToString(t, sep)
     return str
 end
 
+function MCP_IsProfileLoaded(profileName)
+    if not MCP_Config or not MCP_Config.profiles or not MCP_Config.profiles[profileName] then
+        return false
+    end
+
+    local profile = MCP_Config.profiles[profileName]
+    for i = 1, GetNumAddOns() do
+        local name, _, _, enabled = GetAddOnInfo(i)
+        if profile[name] ~= nil then
+            local shouldBeEnabled = profile[name]
+            if (shouldBeEnabled == 1 and enabled ~= 1) or (shouldBeEnabled == 0 and enabled == 1) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
 function MCP_CheckZoneAndPrompt()
     local zone = GetRealZoneText()
     if not zone then return end
 
+    -- === RAID ZONE ===
     if raidZones[zone] then
-        MCP_NonRaidPrompted = false -- reset flag when entering raid
-        if MCP_IsProfileLoaded("raid") then return end
+        MCP_NonRaidPrompted = false
 
-        StaticPopupDialogs["MCP_LOAD_RAID_PROFILE"] = {
-            text = "You are in " .. zone .. ".\n\nLoad the 'raid' profile?",
-            button1 = "Yes",
-            button2 = "No",
-            OnAccept = function()
-                MCP_LoadProfileByName("raid")
-            end,
-            timeout = 0,
-            whileDead = 1,
-            hideOnEscape = 1,
-        }
-        StaticPopup_Show("MCP_LOAD_RAID_PROFILE")
+        if MCP_Config and MCP_Config.profiles and MCP_Config.profiles["raid"] then
+            if MCP_IsProfileLoaded("raid") then return end
 
-    else
-        if MCP_NonRaidPrompted then return end -- only once
-        MCP_NonRaidPrompted = true
-
-        if not MCP_Config or not MCP_Config.profiles then return end
-
-        local options = {}
-        for profileName in pairs(MCP_Config.profiles) do
-            if profileName ~= "raid" and not MCP_IsProfileLoaded(profileName) then
-                table.insert(options, profileName)
-            end
+            StaticPopupDialogs["MCP_LOAD_RAID_PROFILE"] = {
+                text = "You are in " .. zone .. ".\n\nLoad the 'raid' profile?",
+                button1 = "Yes",
+                button2 = "No",
+                OnAccept = function()
+                    MCP_LoadProfileByName("raid")
+                end,
+                timeout = 0,
+                whileDead = 1,
+                hideOnEscape = 1,
+            }
+            StaticPopup_Show("MCP_LOAD_RAID_PROFILE")
+        else
+            StaticPopupDialogs["MCP_LOAD_NONRAID_PROFILE"] = {
+                text = "You are in " .. zone .. ", but no 'raid' profile exists.\n\nCreate one now from current setup?",
+                button1 = "Yes",
+                button2 = "No",
+                OnAccept = function()
+                    MCP_CreateProfileFromCurrent("raid")
+                    print("Raid profile created from current addons.")
+                end,
+                timeout = 0,
+                whileDead = 1,
+                hideOnEscape = 1,
+            }
+            StaticPopup_Show("MCP_CREATE_RAID_PROFILE")
         end
 
-        if MCP_TableLength(options) == 0 then return end
+    -- === NON-RAID ZONE ===
+    else
+        if not MCP_Config or not MCP_Config.profiles then return end
 
-        local suggested = options[1]
+        if MCP_IsProfileLoaded("raid") then
+            if MCP_NonRaidPrompted then return end
+            MCP_NonRaidPrompted = true
 
-        StaticPopupDialogs["MCP_LOAD_OTHER_PROFILE"] = {
-            text = "You are in " .. zone .. ".\n\nLoad profile '" .. suggested .. "'?\n\n(Available: " .. MCP_TableToString(options, ", ") .. ")",
-            button1 = "Yes",
-            button2 = "No",
-            OnAccept = function()
-                MCP_LoadProfileByName(suggested)
-            end,
-            timeout = 0,
-            whileDead = 1,
-            hideOnEscape = 1,
-        }
-        StaticPopup_Show("MCP_LOAD_OTHER_PROFILE")
+            for profileName in pairs(MCP_Config.profiles) do
+                local loaded = MCP_IsProfileLoaded(profileName) and "LOADED" or "NOT loaded"
+            end
+
+            local options = {}
+            for profileName in pairs(MCP_Config.profiles) do
+                if type(profileName) == "string" and profileName ~= "raid" then
+                    table.insert(options, profileName)
+                end
+            end
+
+            if MCP_TableLength(options) == 0 then return end
+
+                        StaticPopupDialogs["MCP_LEFT_RAID_PROFILE_CHANGE"] = {
+                text = "You are no longer in a raid.\n\nDo you want to change profiles?",
+                button1 = "Yes",
+                button2 = "No",
+                OnAccept = function()
+                    MCP_ShowProfileChoicePopup(options)
+                end,
+                timeout = 0,
+                whileDead = true,
+                hideOnEscape = true,
+            }
+            StaticPopup_Show("MCP_LEFT_RAID_PROFILE_CHANGE")
+        end
     end
 end
 
+-- Frame to detect zone changes
 local MCP_ZoneCheckFrame = CreateFrame("Frame")
 MCP_ZoneCheckFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 MCP_ZoneCheckFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -855,3 +881,119 @@ function MCP_MinimapDropDown_Initialize(level)
         UIDropDownMenu_AddButton(info, level)
     end
 end
+
+function MCP_ShowProfileChoicePopup(profiles)
+    if MCP_ProfileChoiceFrame then
+        MCP_ProfileChoiceFrame:Hide()
+        MCP_ProfileChoiceFrame = nil
+    end
+
+    if not profiles or type(profiles) ~= "table" then
+        print("[MCP_ShowProfileChoicePopup] profiles is nil or not a table!")
+        return
+    end
+
+    local frame = CreateFrame("Frame", "MCP_ProfileChoiceFrame", UIParent)
+    frame:SetWidth(300)
+    frame:SetHeight(400)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
+    frame:SetBackdrop({
+        bgFile = "Interface/ChatFrame/ChatFrameBackground",
+        edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 }
+    })
+    frame:SetBackdropColor(0, 0, 0, 0.8)
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", 0, -15)
+    title:SetText("Choose a profile to load")
+
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -5)
+    closeBtn:SetScript("OnClick", function() frame:Hide() end)
+
+    local scrollFrame = CreateFrame("ScrollFrame", nil, frame)
+    scrollFrame:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -20, -35)  -- ajusté pour plus d’espace
+    scrollFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 40)
+    scrollFrame:SetBackdrop({
+        bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    scrollFrame:SetBackdropColor(0, 0, 0, 0.6)
+
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetWidth(260)
+    content:SetHeight(10)
+    content:SetPoint("TOP", scrollFrame, "TOP", 0, 0)  -- Centre horizontalement
+    scrollFrame:SetScrollChild(content)
+
+
+    local buttons = {}
+
+    local function RefreshButtons()
+        for i, btn in pairs(buttons) do
+            btn:Hide()
+        end
+
+        local y = -10
+
+        for i, profileName in ipairs(profiles) do
+            if type(profileName) == "string" and profileName ~= "" then
+                btn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+                btn:SetWidth(180)
+                btn:SetHeight(25)
+                btn:SetPoint("TOP", content, "TOP", -10, y - 5)
+                btn:SetText(profileName)
+                btn:Show()
+
+                local profile = profileName
+                btn:SetScript("OnClick", function()
+                    MCP_LoadProfileByName(profile)
+                    frame:Hide()
+                    print("Loaded profile: " .. tostring(profile))
+                end)
+
+                y = y - 30
+            else
+                print("[MCP_ShowProfileChoicePopup] Warning: skipped invalid profileName:", tostring(profileName))
+            end
+        end
+
+        if count == 0 then
+            if not buttons[1] then
+                buttons[1] = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                buttons[1]:SetPoint("TOP", content, "TOP", 0, -5)
+            end
+            buttons[1]:SetText("No profiles found")
+            buttons[1]:Show()
+            content:SetHeight(40)
+        else
+            if buttons[1] and type(buttons[1].SetText) == "function" then
+                buttons[1]:Hide()
+            end
+            content:SetHeight(math.max(1, -y))
+        end
+    end
+
+    RefreshButtons()
+
+    local bottomCloseBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    bottomCloseBtn:SetWidth(80)
+    bottomCloseBtn:SetHeight(25)
+    bottomCloseBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 15)
+    bottomCloseBtn:SetText("Close")
+    bottomCloseBtn:SetScript("OnClick", function() frame:Hide() end)
+
+    frame:Show()
+    MCP_ProfileChoiceFrame = frame
+end
+
+
