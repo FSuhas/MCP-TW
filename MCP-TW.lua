@@ -136,18 +136,64 @@ local function MCP_new_LoadAddOn(name)
 	end
 end
 
-function MCP_OnLoad()
-	MCP_old_LoadAddOn = LoadAddOn;
-	LoadAddOn = MCP_new_LoadAddOn;
+local function OnPlayerEnteringWorld(self, event)
+    local seg1 = "< |cffffff00M|raster "
+    local seg2 = "|cffffff00C|rontrol "
+    local seg3 = "|cffffff00P|rogram "
+    local seg4 = "|cFF00FF96Turtle WoW|r >"
+    local seg5 = " "
+    local seg6 = "|cffffff00  Type "
+    local seg7 = "|cff00FFFF/mcp help "
+    local seg8 = "|cffffff00for commands."
 
-        -- setup /mcp slash command
-        SlashCmdList["MCPSLASHCMD"] = MCP_SlashHandler;
-        SLASH_MCPSLASHCMD1 = "/mcp";
+    DEFAULT_CHAT_FRAME:AddMessage(seg1 .. seg2 .. seg3 .. seg4 .. seg5)
+    DEFAULT_CHAT_FRAME:AddMessage(seg6 .. seg7 .. seg8)
+
+    this:UnregisterEvent("PLAYER_ENTERING_WORLD")
+end
+
+local msglog = CreateFrame("Frame")
+msglog:RegisterEvent("PLAYER_ENTERING_WORLD")
+msglog:SetScript("OnEvent", OnPlayerEnteringWorld)
+
+
+
+function MCP_OnLoad()
+    MCP_old_LoadAddOn = LoadAddOn
+    LoadAddOn = MCP_new_LoadAddOn
+
+    -- Setup /mcp slash command
+    SlashCmdList["MCPSLASHCMD"] = MCP_SlashHandler
+    SLASH_MCPSLASHCMD1 = "/mcp"
 end
 
 function MCP_SlashHandler(msg)
-        ShowUIPanel(MCP_AddonList);
+    if not msg or msg == "" then
+        ShowUIPanel(MCP_AddonList)
+        return
+    end
+
+    msg = string.lower(msg)
+
+    if msg == "resetraid" then
+        -- Reset flag to allow raid profile creation popup again
+        if MCP_Config and MCP_Config.meta then
+            MCP_Config.meta.raidCreateRefused = false
+            print("Raid profile creation refusal has been reset.")
+        else
+            print("Configuration not found.")
+        end
+    elseif msg == "help" then
+        print("MCP commands:")
+        print("/mcp - Opens the MCP addon list window.")
+        print("/mcp resetraid - Resets the raid profile creation refusal flag.")
+        print("/mcp help - Shows this help message.")
+    else
+        print("Unknown command. Type /mcp help for usage.")
+    end
 end
+
+
 
 function MCP_AddonList_Enable(index,enabled)
 	if (type(index) == "number") then
@@ -550,7 +596,11 @@ end
 
 
 
-local MCP_NonRaidPrompted = false
+MCP_NonRaidPrompted = MCP_NonRaidPrompted or false
+MCP_RaidPromptedOnce = MCP_RaidPromptedOnce or false
+local MCP_RaidPromptedZones = {}  -- pour se souvenir des zones déjà proposées
+local MCP_RaidCreateRefused = false
+
 
 local raidZones = {
     ["Naxxramas"] = true,
@@ -602,16 +652,28 @@ function MCP_IsProfileLoaded(profileName)
     return true
 end
 
+-- Initialisation au cas où
+if not MCP_Config then MCP_Config = {} end
+if not MCP_Config.meta then MCP_Config.meta = {} end
+
 function MCP_CheckZoneAndPrompt()
     local zone = GetRealZoneText()
     if not zone then return end
 
+    -- Reset si on quitte une zone de raid
+    if not raidZones[zone] then
+        MCP_NonRaidPrompted = false
+        MCP_RaidPromptedOnce = false
+    end
+
     -- === RAID ZONE ===
     if raidZones[zone] then
+        if MCP_Config.meta.raidCreateRefused then return end
         MCP_NonRaidPrompted = false
 
-        if MCP_Config and MCP_Config.profiles and MCP_Config.profiles["raid"] then
-            if MCP_IsProfileLoaded("raid") then return end
+        if MCP_Config.profiles and MCP_Config.profiles["raid"] then
+            if MCP_IsProfileLoaded("raid") or MCP_RaidPromptedOnce then return end
+            MCP_RaidPromptedOnce = true
 
             StaticPopupDialogs["MCP_LOAD_RAID_PROFILE"] = {
                 text = "You are in " .. zone .. ".\n\nLoad the 'raid' profile?",
@@ -626,13 +688,20 @@ function MCP_CheckZoneAndPrompt()
             }
             StaticPopup_Show("MCP_LOAD_RAID_PROFILE")
         else
-            StaticPopupDialogs["MCP_LOAD_NONRAID_PROFILE"] = {
+            if MCP_RaidPromptedOnce then return end
+            MCP_RaidPromptedOnce = true
+
+            StaticPopupDialogs["MCP_CREATE_RAID_PROFILE"] = {
                 text = "You are in " .. zone .. ", but no 'raid' profile exists.\n\nCreate one now from current setup?",
                 button1 = "Yes",
                 button2 = "No",
                 OnAccept = function()
                     MCP_CreateProfileFromCurrent("raid")
-                    print("Raid profile created from current addons.")
+                    MCP_LoadProfileByName("raid")
+                    print("Raid profile created and loaded.")
+                end,
+                OnCancel = function()
+                    MCP_Config.meta.raidCreateRefused = true -- Sauvegarde persistante
                 end,
                 timeout = 0,
                 whileDead = 1,
@@ -662,7 +731,7 @@ function MCP_CheckZoneAndPrompt()
 
             if MCP_TableLength(options) == 0 then return end
 
-                        StaticPopupDialogs["MCP_LEFT_RAID_PROFILE_CHANGE"] = {
+            StaticPopupDialogs["MCP_LEFT_RAID_PROFILE_CHANGE"] = {
                 text = "You are no longer in a raid.\n\nDo you want to change profiles?",
                 button1 = "Yes",
                 button2 = "No",
@@ -677,6 +746,7 @@ function MCP_CheckZoneAndPrompt()
         end
     end
 end
+
 
 -- Frame to detect zone changes
 local MCP_ZoneCheckFrame = CreateFrame("Frame")
@@ -995,5 +1065,3 @@ function MCP_ShowProfileChoicePopup(profiles)
     frame:Show()
     MCP_ProfileChoiceFrame = frame
 end
-
-
